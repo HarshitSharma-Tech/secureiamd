@@ -47,9 +47,37 @@ function disabledReason() {
 const REASON = disabledReason();
 const ENABLED = FLAG && REASON === null;
 
-/** True when the plaintext code should be persisted for later retrieval. */
+/* ------------------------------------------------------------------ */
+/* DEMO MODE                                                           */
+/*                                                                     */
+/* Separate from the evaluator API above, and safer by construction.   */
+/*                                                                     */
+/* DEMO_SMS_OTP=true exposes GET /api/demo/sms-otp, which the frontend */
+/* calls to show the simulated code on the mobile-verification screen. */
+/* It needs no token, because it is gated on the caller's own signed   */
+/* reg_session cookie and only ever returns THAT user's own active SMS */
+/* challenge. You cannot read anyone else's code with it.              */
+/*                                                                     */
+/* Only meaningful with simulated SMS — refused outright when a real   */
+/* provider is configured, since then the code genuinely reaches a     */
+/* phone and must never be echoed back to a browser.                   */
+/* ------------------------------------------------------------------ */
+const DEMO_FLAG = String(process.env.DEMO_SMS_OTP || "false").toLowerCase() === "true";
+const DEMO_ENABLED = DEMO_FLAG && SMS_MODE === "mock";
+
+/**
+ * True when the plaintext code must be persisted so it can be handed
+ * back later. False by default — then otp_challenges.test_otp stays
+ * NULL and only the SHA-256 hash exists.
+ */
 function shouldStoreTestOtp() {
-  return ENABLED;
+  return ENABLED || DEMO_ENABLED;
+}
+
+function describeDemoConfig() {
+  if (!DEMO_FLAG) return "off";
+  if (SMS_MODE !== "mock") return `refused: SMS_MODE=${SMS_MODE} (demo echo is mock-only)`;
+  return "ON — GET /api/demo/sms-otp returns the caller's own simulated SMS code";
 }
 
 /** Constant-time token check — avoids leaking the token via response timing. */
@@ -68,7 +96,9 @@ function describeTestConfig() {
 
 module.exports = {
   ENABLED,
+  DEMO_ENABLED,
   shouldStoreTestOtp,
   tokenMatches,
   describeTestConfig,
+  describeDemoConfig,
 };

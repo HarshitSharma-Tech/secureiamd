@@ -88,6 +88,13 @@ if (testing.ENABLED) {
   app.use("/api/test", require("./routes/testing"));
 }
 
+// DEMO-ONLY route. Mounted only when DEMO_SMS_OTP=true and SMS_MODE=mock.
+// Lets the verification screen show the simulated code; scoped to the
+// caller's own reg_session, so it can never reveal another user's code.
+if (testing.DEMO_ENABLED) {
+  app.use("/api/demo", require("./routes/demo"));
+}
+
 /* ------------------------------------------------------------------ */
 /* Frontend                                                            */
 /* ------------------------------------------------------------------ */
@@ -123,7 +130,8 @@ if (require.main === module) {
     console.log(`  database : ${process.env.DATABASE_URL ? "configured" : "MISSING DATABASE_URL"}`);
     console.log(`  email    : ${describeEmailConfig()}`);
     console.log(`  sms      : ${describeSmsConfig()}`);
-    console.log(`  test API : ${testing.describeTestConfig()}\n`);
+    console.log(`  test API : ${testing.describeTestConfig()}`);
+    console.log(`  demo OTP : ${testing.describeDemoConfig()}\n`);
   });
 }
 

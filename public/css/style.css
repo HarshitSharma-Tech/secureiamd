@@ -654,3 +654,44 @@ input:focus {
   font-weight: 600;
   word-break: break-word;
 }
+
+/* ---------- Demo SMS OTP panel ---------- */
+/* Only rendered when the server runs with DEMO_SMS_OTP=true and
+   SMS_MODE=mock. Visually distinct from the product UI on purpose —
+   it must never be mistaken for a real delivered message. */
+.demo-otp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 4px;
+  padding: 14px 16px;
+  border: 1px dashed #d97706;
+  border-radius: 12px;
+  background: #fffbeb;
+  text-align: center;
+}
+
+.demo-otp-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.demo-otp-code {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: #92400e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Trailing letter-spacing would push the digits off-centre. */
+  text-indent: 8px;
+}
+
+.demo-otp-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #a16207;
+}

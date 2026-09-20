@@ -59,6 +59,51 @@
   }
 
 
+  /**
+   * Demo SMS OTP panel.
+   *
+   * SMS is simulated, so no code reaches a phone. When the server is
+   * running with DEMO_SMS_OTP=true (and SMS_MODE=mock) it exposes
+   * GET /api/demo/sms-otp, which returns the code for THIS user's own
+   * active challenge — identified from the HttpOnly reg_session cookie,
+   * so it can never show anyone else's.
+   *
+   * If the endpoint is not mounted the fetch 404s and nothing renders,
+   * so the screen looks exactly like the mockup in a real deployment.
+   */
+  async function showDemoOtp(screenName) {
+    const screen = $(`[data-screen="${screenName}"]`);
+    if (!screen) return;
+
+    let panel = $(".demo-otp", screen);
+
+    let data = null;
+    try {
+      const res = await fetch("/api/demo/sms-otp", { credentials: "same-origin" });
+      if (res.ok) data = await res.json();
+    } catch {
+      /* demo mode simply isn't available — stay silent */
+    }
+
+    if (!data?.otp) {
+      if (panel) panel.remove();
+      return;
+    }
+
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "demo-otp";
+      const status = $(".otp-status", screen);
+      status ? status.after(panel) : screen.querySelector("form")?.prepend(panel);
+    }
+
+    panel.innerHTML =
+      `<span class="demo-otp-label">Demo SMS OTP</span>` +
+      `<code class="demo-otp-code">${String(data.otp).replace(/[^0-9]/g, "")}</code>` +
+      `<span class="demo-otp-note">SMS is simulated — no message was sent. ` +
+      `This code is generated and verified by the server exactly like a real one.</span>`;
+  }
+
   /* ------------------------------------------------------------------ */
   /* App state                                                           */
   /* ------------------------------------------------------------------ */
@@ -462,6 +507,7 @@
         $("#smsOtpSubmit").hidden = false;
         $("#smsResendBtn").hidden = true;
         startSmsTimer(smsRes.data.expiresInMs);
+        showDemoOtp("sms-otp");
         showScreen("sms-otp");
       } else {
         toast(smsRes.data.message || "Could not send SMS OTP.", "error");
@@ -584,6 +630,7 @@
     $("#smsOtpSubmit").hidden = false;
     $("#smsResendBtn").hidden = true;
     startSmsTimer(data.expiresInMs);
+    showDemoOtp("sms-otp");
     startResendCooldown($("#smsResendLink"), $("#smsResendCooldown"));
     toast("A new code was sent to your mobile.", "success");
   }
@@ -625,6 +672,7 @@
     } else {
       state.mfaChallengeId = data.challengeId;
       prepareMfaVerifyScreen(method, data.expiresInMs);
+      if (method === "sms") showDemoOtp("mfa-verify");
       showScreen("mfa-verify");
     }
   });
@@ -732,6 +780,7 @@
       if (status !== 200) return toast(data.message || "Could not resend code.", "error");
       state.mfaChallengeId = data.challengeId;
       prepareMfaVerifyScreen(state.mfaMethod, data.expiresInMs);
+      if (state.mfaMethod === "sms") showDemoOtp("mfa-verify");
       toast("A new code was sent.", "success");
     }
   });
