@@ -14,6 +14,7 @@ const authRoutes = require("./routes/auth");
 const { describeEmailConfig } = require("./lib/mailer");
 const { describeSmsConfig } = require("./lib/sms");
 const testing = require("./lib/testing");
+const { query } = require("./db/pool");
 
 const app = express();
 
@@ -77,7 +78,45 @@ app.use(cookieParser());
 /* ------------------------------------------------------------------ */
 /* API routes                                                          */
 /* ------------------------------------------------------------------ */
-app.get("/api/health", (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+/**
+ * Liveness + configuration check.
+ *
+ * Reports which required variables are PRESENT — names only, never
+ * values. Deliberately safe to expose: it leaks no secret, and without
+ * it a misconfigured deployment gives nothing but an opaque 500.
+ */
+app.get("/api/health", async (req, res) => {
+  const required = ["DATABASE_URL", "JWT_SECRET"];
+  const optional = [
+    "EMAIL_MODE", "EMAIL_HOST", "EMAIL_USER", "EMAIL_PASSWORD",
+    "SMS_MODE", "DEMO_SMS_OTP", "ENABLE_TEST_OTP_API",
+  ];
+
+  const missing = required.filter((k) => !process.env[k]);
+  const jwtTooShort = Boolean(process.env.JWT_SECRET) && process.env.JWT_SECRET.length < 32;
+
+  // Actually touch the database rather than just checking the variable.
+  let database = "not_configured";
+  if (process.env.DATABASE_URL) {
+    try {
+      await query("select 1");
+      database = "connected";
+    } catch (err) {
+      database = `error: ${err.code || err.message}`;
+    }
+  }
+
+  const healthy = missing.length === 0 && !jwtTooShort && database === "connected";
+
+  return res.status(healthy ? 200 : 503).json({
+    ok: healthy,
+    time: new Date().toISOString(),
+    database,
+    missingRequired: missing,
+    jwtSecretTooShort: jwtTooShort || undefined,
+    present: optional.filter((k) => process.env[k]),
+  });
+});
 app.use("/api", registerRoutes);
 app.use("/api", authRoutes);
 

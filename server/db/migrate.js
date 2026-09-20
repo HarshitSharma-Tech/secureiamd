@@ -10,7 +10,8 @@ const fs = require("fs");
 const path = require("path");
 
 async function main() {
-  const { pool } = require("./pool");
+  const { getPool } = require("./pool");
+  const pool = getPool();
   const sql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
 
   console.log("Applying schema to", maskUrl(process.env.DATABASE_URL), "...");

@@ -11,15 +11,27 @@
 
 const { Pool } = require("pg");
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error(
-    "DATABASE_URL is not set. Copy .env.example to .env and add your Supabase connection string."
-  );
+/**
+ * Note on failure behaviour: this used to throw at import time when
+ * DATABASE_URL was missing, which killed the whole serverless function —
+ * including the static frontend — and gave a bare 500 with no clue why.
+ * The check now happens on first query instead, so the app still boots,
+ * /api/health can report exactly which variables are missing, and only
+ * database-backed routes fail.
+ */
+function isConfigured() {
+  return Boolean(process.env.DATABASE_URL);
 }
 
 function createPool() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL is not set. On Vercel: Settings → Environment Variables, " +
+        "add it for Production, Preview and Development, then redeploy."
+    );
+  }
+
   return new Pool({
     connectionString,
     // Supabase requires TLS. Its certificate chain is not in Node's default
@@ -35,28 +47,30 @@ function createPool() {
   });
 }
 
-// Reuse across warm serverless invocations instead of leaking a new pool.
-const pool = globalThis.__secureidPool || createPool();
-if (!globalThis.__secureidPool) globalThis.__secureidPool = pool;
-
-pool.on("error", (err) => {
-  console.error("[db] idle client error:", err.message);
-});
+/** Built on first use, then reused across warm serverless invocations. */
+function getPool() {
+  if (!globalThis.__secureidPool) {
+    const p = createPool();
+    p.on("error", (err) => console.error("[db] idle client error:", err.message));
+    globalThis.__secureidPool = p;
+  }
+  return globalThis.__secureidPool;
+}
 
 /** Run a parameterised query. Never interpolate user input into SQL. */
 async function query(text, params) {
-  return pool.query(text, params);
+  return getPool().query(text, params);
 }
 
 /** Convenience: first row or null. */
 async function queryOne(text, params) {
-  const { rows } = await pool.query(text, params);
+  const { rows } = await getPool().query(text, params);
   return rows[0] || null;
 }
 
 /** Run several statements inside a transaction. */
 async function withTransaction(fn) {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     await client.query("BEGIN");
     const result = await fn(client);
@@ -70,4 +84,4 @@ async function withTransaction(fn) {
   }
 }
 
-module.exports = { pool, query, queryOne, withTransaction };
+module.exports = { getPool, isConfigured, query, queryOne, withTransaction };

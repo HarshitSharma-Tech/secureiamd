@@ -30,11 +30,20 @@ const SID_COOKIE = "sid";
 const REG_TTL_MS = 30 * 60 * 1000; // 30 min — plenty for a signup, short enough to matter
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_HOURS || 12) * 60 * 60 * 1000;
 
-if (!JWT_SECRET || JWT_SECRET.length < 32) {
-  throw new Error(
-    "JWT_SECRET must be set to a random string of at least 32 characters. " +
-      "Generate one with:  node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\""
-  );
+/**
+ * Checked on use rather than at import. Throwing here at module load
+ * would take down the entire serverless function — including the static
+ * frontend and /api/health — leaving an opaque 500 with no diagnosis.
+ * This way the app boots and /api/health names the problem.
+ */
+function requireSecret() {
+  if (!JWT_SECRET || JWT_SECRET.length < 32) {
+    throw new Error(
+      "JWT_SECRET must be set to a random string of at least 32 characters. " +
+        "Generate one with:  node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\""
+    );
+  }
+  return JWT_SECRET;
 }
 
 function cookieOptions(maxAgeMs) {
@@ -55,7 +64,7 @@ function cookieOptions(maxAgeMs) {
 /* ------------------------------------------------------------------ */
 
 function issueRegistrationCookie(res, userId) {
-  const token = jwt.sign({ sub: userId, typ: "reg" }, JWT_SECRET, {
+  const token = jwt.sign({ sub: userId, typ: "reg" }, requireSecret(), {
     expiresIn: Math.floor(REG_TTL_MS / 1000),
   });
   res.cookie(REG_COOKIE, token, cookieOptions(REG_TTL_MS));
@@ -70,7 +79,7 @@ function registrationUserId(req) {
   const token = req.cookies?.[REG_COOKIE];
   if (!token) return null;
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, requireSecret());
     return payload.typ === "reg" ? payload.sub : null;
   } catch {
     return null;
@@ -114,7 +123,7 @@ async function createSession(res, user, req) {
     ]
   );
 
-  const token = jwt.sign({ sub: user.id, jti: session.id, typ: "sid" }, JWT_SECRET, {
+  const token = jwt.sign({ sub: user.id, jti: session.id, typ: "sid" }, requireSecret(), {
     expiresIn: Math.floor(SESSION_TTL_MS / 1000),
   });
 
@@ -132,7 +141,7 @@ async function currentUser(req) {
 
   let payload;
   try {
-    payload = jwt.verify(token, JWT_SECRET);
+    payload = jwt.verify(token, requireSecret());
   } catch {
     return null;
   }
